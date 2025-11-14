@@ -234,6 +234,7 @@ static int cmd_idle_test(const struct shell *shell, size_t argc, char **argv)
 
 	return cmd_subsys_off_configure(shell);
 }
+
 #endif
 
 static bool param_get_flag(size_t argc, char **argv, char *p_flag)
@@ -370,8 +371,14 @@ static int cmd_start(const struct shell *shell, size_t argc, char **argv)
 		total_length += 3;
 	}
 
-	int8_t ret = take_es0_into_use_with_params(ll_boot_params_buffer, total_length,
+	int8_t ret;
+	if (param_get_flag(argc, argv, "--force")) {
+	    ret = se_service_boot_es0(ll_boot_params_buffer, total_length,
 						   es0_clock_select);
+	} else {
+	    ret = take_es0_into_use_with_params(ll_boot_params_buffer, total_length,
+						   es0_clock_select);
+	}
 
 	shell_fprintf(shell, SHELL_VT100_COLOR_DEFAULT, "Start ES0 ret:%d\n", ret);
 	return 0;
@@ -379,7 +386,12 @@ static int cmd_start(const struct shell *shell, size_t argc, char **argv)
 
 static int cmd_stop(const struct shell *shell, size_t argc, char **argv)
 {
-	int8_t ret = stop_using_es0();
+	int8_t ret;
+	if (param_get_flag(argc, argv, "--force")) {
+	    ret = se_service_shutdown_es0();
+	} else {
+	    ret = stop_using_es0();
+	}
 
 	shell_fprintf(shell, SHELL_VT100_COLOR_DEFAULT, "Stop ES0 ret:%d\n", ret);
 	return 0;

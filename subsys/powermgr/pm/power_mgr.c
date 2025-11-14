@@ -98,6 +98,8 @@ static int app_pre_kernel_init(void)
 }
 SYS_INIT(app_pre_kernel_init, PRE_KERNEL_1, 39);
 
+static const struct device *const wakeup_dev = DEVICE_DT_GET(WAKEUP_SOURCE);
+
 static int pm_application_init(void)
 {
 	if (!balletto_vbat_resume_enabled()) {
@@ -119,14 +121,29 @@ uint32_t power_mgr_get_wakeup_reason(void)
 	return wakeup_reason;
 }
 
+uint32_t power_mgr_get_current_ticks(void)
+{
+	uint32_t curr_ticks;
+	int ret = counter_get_value(wakeup_dev, &curr_ticks);
+	if(ret) {
+		printk("ERROR: power_mgr_get_current_ticks ret = %d!\n", ret);
+	}
+
+	return curr_ticks;
+}
+
+uint32_t power_mgr_s_to_ticks(const uint32_t s)
+{
+	// this might saturate the ticks (return UINT32T_MAX) if value would exceed uint32_t
+	return counter_us_to_ticks(wakeup_dev, s * 1000 * 1000);
+}
+
 int power_mgr_set_offprofile(pm_state_mode_type_e pm_mode)
 {
 	int ret;
 	off_profile_t offp;
 
 	if (!balletto_vbat_resume_enabled()) {
-
-		const struct device *const wakeup_dev = DEVICE_DT_GET(WAKEUP_SOURCE);
 
 		balletto_vbat_resume_enable();
 
@@ -136,7 +153,7 @@ int power_mgr_set_offprofile(pm_state_mode_type_e pm_mode)
 		}
 
 		ret = counter_start(wakeup_dev);
-		if (ret) {
+		if (ret && ret != -EALREADY) {
 			LOG_ERR("Failed to start counter (err %d)", ret);
 			return -1;
 		}
