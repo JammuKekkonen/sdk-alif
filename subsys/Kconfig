@@ -12,6 +12,7 @@ rsource "ieee802154/Kconfig"
 rsource "bluetooth/Kconfig"
 rsource "powermgr/Kconfig"
 rsource "modules/ethosu/Kconfig"
+rsource "modules/testcommands/Kconfig"
 rsource "dbuf_display/Kconfig"
 rsource "img_assets/Kconfig"
 

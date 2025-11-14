@@ -35,6 +35,7 @@
 #include "gatt_srv.h"
 #include "ke_mem.h"
 #include "power_mgr.h"
+#include "appl_shell.h"
 
 /**
  * As per the application requirements, it can remove the memory blocks which are not in use.
@@ -71,6 +72,13 @@ int n __attribute__((noinit));
 #define CONN_INT_MAX_SLOTS               100
 #define RTC_WAKEUP_INTERVAL_MS           (20 + (n++ % 50))
 #define RTC_CONNECTED_WAKEUP_INTERVAL_MS 400
+#elif CONFIG_SHELL
+#define ADV_INT_MIN_SLOTS                ble_adv_int_min
+#define ADV_INT_MAX_SLOTS                ble_adv_int_max
+#define CONN_INT_MIN_SLOTS               ble_conn_int_min
+#define CONN_INT_MAX_SLOTS               ble_conn_int_max
+#define RTC_WAKEUP_INTERVAL_MS           ble_rtc_wakeup
+#define RTC_CONNECTED_WAKEUP_INTERVAL_MS ble_rtc_connected_wakeup
 #else
 #define ADV_INT_MIN_SLOTS                1000
 #define ADV_INT_MAX_SLOTS                1000
@@ -125,9 +133,16 @@ static uint8_t conn_idx __attribute__((noinit));
 static uint8_t adv_actv_idx __attribute__((noinit));
 static struct service_env env __attribute__((noinit));
 
-/* Load name from configuration file */
+#if CONFIG_SHELL
+extern char app_shell_device_name[];
+#define DEVICE_NAME_VAR app_shell_device_name
+#else
 #define DEVICE_NAME "ALIF_PM"
-static const char device_name[] = DEVICE_NAME;
+static const char local_device_name[] = DEVICE_NAME;
+#define DEVICE_NAME_VAR local_device_name
+#endif
+
+static const char* device_name = DEVICE_NAME_VAR;
 
 /* Service UUID to pass into gatt_db_svc_add */
 static const uint8_t hello_service_uuid[] = HELLO_UUID_128_SVC;
@@ -183,11 +198,11 @@ struct service_env {
 	uint16_t ntf_cfg;
 };
 
-const gapc_le_con_param_nego_with_ce_len_t preferred_connection_param = {
+gapc_le_con_param_nego_with_ce_len_t preferred_connection_param = {
 	.ce_len_min = 5,
 	.ce_len_max = 10,
-	.hdr.interval_min = CONN_INT_MIN_SLOTS,
-	.hdr.interval_max = CONN_INT_MAX_SLOTS,
+	.hdr.interval_min = 6,
+	.hdr.interval_max = 20,
 	.hdr.latency = 0,
 	.hdr.sup_to = 800};
 
@@ -272,7 +287,7 @@ static void on_disconnection(uint8_t conidx, uint32_t metainfo, uint16_t reason)
 static void on_name_get(uint8_t conidx, uint32_t metainfo, uint16_t token, uint16_t offset,
 			uint16_t max_len)
 {
-	const size_t device_name_len = sizeof(device_name) - 1;
+	const size_t device_name_len = strlen(device_name);
 	const size_t short_len = (device_name_len > max_len ? max_len : device_name_len);
 
 	printk("%s\n", __func__);
@@ -430,7 +445,7 @@ static uint16_t set_scan_data(uint8_t actv_idx)
 
 	/* gatt service identifier */
 	uint16_t svc[8] = {0xd123, 0xeabc, 0x785f, 0x1523, 0xefde, 0x1212, 0x1523, 0x0000};
-	const size_t device_name_len = sizeof(device_name) - 1;
+	const size_t device_name_len = strlen(device_name);
 	const uint16_t adv_device_name = GATT_HANDLE_LEN + device_name_len;
 	const uint16_t adv_uuid_svc = GATT_HANDLE_LEN + GATT_UUID_128_LEN;
 	const uint16_t adv_len = adv_uuid_svc+adv_device_name;
@@ -941,6 +956,11 @@ int main(void)
 		}
 	}
 
+	appl_wait_to_continue();
+	/* Update prefered connection parameters*/
+	preferred_connection_param.hdr.interval_min = CONN_INT_MIN_SLOTS;
+	preferred_connection_param.hdr.interval_max = CONN_INT_MAX_SLOTS;
+
 	/* Start up bluetooth host stack. */
 	ble_status = alif_ble_enable(NULL);
 
@@ -996,7 +1016,9 @@ int main(void)
 		}
 	}
 
-	power_mgr_ready_for_sleep();
+	if (IS_ENABLED(CONFIG_SLEEP_ENABLED) && appl_allow_sleep()) {
+		power_mgr_ready_for_sleep();
+	}
 	while (1) {
 
 		if (conn_status == BT_CONN_STATE_CONNECTED) {

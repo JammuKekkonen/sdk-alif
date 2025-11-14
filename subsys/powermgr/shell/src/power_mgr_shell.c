@@ -233,6 +233,7 @@ static int cmd_idle_test(const struct shell *shell, size_t argc, char **argv)
 
 	return cmd_subsys_off_configure(shell);
 }
+
 #endif
 
 static bool param_get_flag(size_t argc, char **argv, char *p_flag)
