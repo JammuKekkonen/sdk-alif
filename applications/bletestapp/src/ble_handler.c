@@ -326,6 +326,32 @@ static const gapm_callbacks_t gapm_cbs = {
 	.p_gapm_cbs = &gapm_err_cbs,
 };
 
+void app_connection_status_update(enum gapm_connection_event con_event, uint8_t con_idx,
+				  uint16_t status)
+{
+	switch (con_event) {
+	case GAPM_API_SEC_CONNECTED_KNOWN_DEVICE:
+		conn_status = true;
+		break;
+	case GAPM_API_DEV_CONNECTED:
+		conn_status = true;
+		break;
+	case GAPM_API_DEV_DISCONNECTED:
+		LOG_INF("Client disconnected (conidx: %u), restating advertising", con_idx);
+
+		conn_status = false;
+		LOG_INF("BLE disconnected conn:%d. Waiting new connection", con_idx);
+		break;
+	case GAPM_API_PAIRING_FAIL:
+		LOG_INF("Connection pairing index %u fail for reason %u", con_idx, status);
+		break;
+	}
+}
+
+static gapm_user_cb_t gapm_user_cb = {
+	.connection_status_update = app_connection_status_update,
+};
+
 static uint16_t set_advertising_data(uint8_t actv_idx)
 {
 	bt_adv_data_set_name_auto(device_name, strlen(device_name));
@@ -614,7 +640,7 @@ int ble_init(void)
 		se_service_get_rnd_num(&gapm_cfg.private_identity.addr[3], 3);
 		/* Configure Bluetooth Stack */
 		LOG_INF("Init gapm service");
-		rc = bt_gapm_init(&gapm_cfg, &gapm_cbs, device_name, strlen(device_name));
+		rc = bt_gapm_init(&gapm_cfg, &gapm_user_cb, device_name, strlen(device_name));
 		if (rc) {
 			LOG_ERR("gapm_configure error %u", rc);
 			return -1;
